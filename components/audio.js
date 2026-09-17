@@ -4,7 +4,7 @@
    so nothing has to be downloaded. Off until the person asks.
    ============================================================ */
 export function createAudio() {
-  let ctx = null, master = null, musicGain = null, running = false, gullTimer = null, musicTimer = null;
+  let ctx = null, master = null, musicGain = null, music = null, musicSource = null, running = false, gullTimer = null;
   let volume = 0.75;
   const listeners = new Set();
 
@@ -15,8 +15,15 @@ export function createAudio() {
     master.gain.value = 0;
     master.connect(ctx.destination);
     musicGain = ctx.createGain();
-    musicGain.gain.value = 0.34;
+    musicGain.gain.value = 0.42;
     musicGain.connect(master);
+
+    music = new Audio('./music.mp3');
+    music.loop = true;
+    music.preload = 'auto';
+    music.volume = 1;
+    musicSource = ctx.createMediaElementSource(music);
+    musicSource.connect(musicGain);
 
     /* --- waves: brown-ish noise, low-passed, swelling with two slow LFOs --- */
     const len = ctx.sampleRate * 4;
@@ -60,40 +67,6 @@ export function createAudio() {
     noise.start(); lfo1.start(); lfo2.start();
   }
 
-  /* A small, repeating Dorian phrase gives the sea sound a gentle Greek character. */
-  const melody = [293.66, 349.23, 392.00, 440.00, 392.00, 349.23, 329.63, 293.66];
-  function playNote(frequency, delay = 0) {
-    if (!ctx || !musicGain || !running) return;
-    const t = ctx.currentTime + delay;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = 'triangle';
-    o.frequency.setValueAtTime(frequency, t);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.16, t + 0.045);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.62);
-    o.connect(g).connect(musicGain);
-    o.start(t);
-    o.stop(t + 0.68);
-    if (frequency === melody[0]) {
-      const bass = ctx.createOscillator();
-      const bassGain = ctx.createGain();
-      bass.type = 'sine';
-      bass.frequency.setValueAtTime(frequency / 2, t);
-      bassGain.gain.setValueAtTime(0.0001, t);
-      bassGain.gain.exponentialRampToValueAtTime(0.07, t + 0.06);
-      bassGain.gain.exponentialRampToValueAtTime(0.0001, t + 1.35);
-      bass.connect(bassGain).connect(musicGain);
-      bass.start(t);
-      bass.stop(t + 1.4);
-    }
-  }
-  function scheduleMelody() {
-    clearTimeout(musicTimer);
-    if (!running) return;
-    melody.forEach((note, i) => playNote(note, i * 0.72));
-    musicTimer = setTimeout(scheduleMelody, melody.length * 720);
-  }
   function notify() { listeners.forEach(listener => listener(running, volume)); }
 
   /* one gull cry: a pitch-bent sine with a touch of noise */
@@ -126,14 +99,14 @@ export function createAudio() {
     master.gain.cancelScheduledValues(ctx.currentTime);
     master.gain.setTargetAtTime(volume * 0.9, ctx.currentTime, 1.4);
     scheduleGulls();
-    scheduleMelody();
+    await music.play();
     notify();
   }
   async function stop() {
     if (!ctx) return;
     running = false;
     clearTimeout(gullTimer);
-    clearTimeout(musicTimer);
+    if (music) { music.pause(); music.currentTime = 0; }
     master.gain.cancelScheduledValues(ctx.currentTime);
     master.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
     setTimeout(() => { if (!running && ctx && ctx.state === 'running') ctx.suspend(); }, 2500);

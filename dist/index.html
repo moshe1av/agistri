@@ -38973,7 +38973,7 @@ void main() {
 
   // components/audio.js
   function createAudio() {
-    let ctx = null, master = null, musicGain = null, running = false, gullTimer = null, musicTimer = null;
+    let ctx = null, master = null, musicGain = null, music = null, musicSource = null, running = false, gullTimer = null;
     let volume = 0.75;
     const listeners = /* @__PURE__ */ new Set();
     function build2() {
@@ -38983,8 +38983,14 @@ void main() {
       master.gain.value = 0;
       master.connect(ctx.destination);
       musicGain = ctx.createGain();
-      musicGain.gain.value = 0.34;
+      musicGain.gain.value = 0.42;
       musicGain.connect(master);
+      music = new Audio("./music.mp3");
+      music.loop = true;
+      music.preload = "auto";
+      music.volume = 1;
+      musicSource = ctx.createMediaElementSource(music);
+      musicSource.connect(musicGain);
       const len = ctx.sampleRate * 4;
       const buf = ctx.createBuffer(2, len, ctx.sampleRate);
       for (let c = 0; c < 2; c++) {
@@ -39041,39 +39047,6 @@ void main() {
       lfo1.start();
       lfo2.start();
     }
-    const melody = [293.66, 349.23, 392, 440, 392, 349.23, 329.63, 293.66];
-    function playNote(frequency, delay = 0) {
-      if (!ctx || !musicGain || !running) return;
-      const t = ctx.currentTime + delay;
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = "triangle";
-      o.frequency.setValueAtTime(frequency, t);
-      g.gain.setValueAtTime(1e-4, t);
-      g.gain.exponentialRampToValueAtTime(0.16, t + 0.045);
-      g.gain.exponentialRampToValueAtTime(1e-4, t + 0.62);
-      o.connect(g).connect(musicGain);
-      o.start(t);
-      o.stop(t + 0.68);
-      if (frequency === melody[0]) {
-        const bass = ctx.createOscillator();
-        const bassGain = ctx.createGain();
-        bass.type = "sine";
-        bass.frequency.setValueAtTime(frequency / 2, t);
-        bassGain.gain.setValueAtTime(1e-4, t);
-        bassGain.gain.exponentialRampToValueAtTime(0.07, t + 0.06);
-        bassGain.gain.exponentialRampToValueAtTime(1e-4, t + 1.35);
-        bass.connect(bassGain).connect(musicGain);
-        bass.start(t);
-        bass.stop(t + 1.4);
-      }
-    }
-    function scheduleMelody() {
-      clearTimeout(musicTimer);
-      if (!running) return;
-      melody.forEach((note, i) => playNote(note, i * 0.72));
-      musicTimer = setTimeout(scheduleMelody, melody.length * 720);
-    }
     function notify() {
       listeners.forEach((listener) => listener(running, volume));
     }
@@ -39110,14 +39083,17 @@ void main() {
       master.gain.cancelScheduledValues(ctx.currentTime);
       master.gain.setTargetAtTime(volume * 0.9, ctx.currentTime, 1.4);
       scheduleGulls();
-      scheduleMelody();
+      await music.play();
       notify();
     }
     async function stop() {
       if (!ctx) return;
       running = false;
       clearTimeout(gullTimer);
-      clearTimeout(musicTimer);
+      if (music) {
+        music.pause();
+        music.currentTime = 0;
+      }
       master.gain.cancelScheduledValues(ctx.currentTime);
       master.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
       setTimeout(() => {
