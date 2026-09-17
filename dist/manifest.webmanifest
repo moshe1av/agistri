@@ -1,0 +1,11 @@
+{
+  "name": "אגיסטרי — חמישה ימים באי הירוק",
+  "short_name": "אגיסטרי",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#062A4A",
+  "theme_color": "#062A4A",
+  "description": "מסע תלת־ממד סינמטי באגיסטרי, יוון"
+}
