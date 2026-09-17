@@ -4,7 +4,9 @@
    so nothing has to be downloaded. Off until the person asks.
    ============================================================ */
 export function createAudio() {
-  let ctx = null, master = null, running = false, gullTimer = null;
+  let ctx = null, master = null, musicGain = null, running = false, gullTimer = null, musicTimer = null;
+  let volume = 0.75;
+  const listeners = new Set();
 
   function build() {
     const AC = window.AudioContext || window.webkitAudioContext;
@@ -12,6 +14,9 @@ export function createAudio() {
     master = ctx.createGain();
     master.gain.value = 0;
     master.connect(ctx.destination);
+    musicGain = ctx.createGain();
+    musicGain.gain.value = 0.18;
+    musicGain.connect(master);
 
     /* --- waves: brown-ish noise, low-passed, swelling with two slow LFOs --- */
     const len = ctx.sampleRate * 4;
@@ -55,6 +60,30 @@ export function createAudio() {
     noise.start(); lfo1.start(); lfo2.start();
   }
 
+  /* A small, repeating Dorian phrase gives the sea sound a gentle Greek character. */
+  const melody = [293.66, 349.23, 392.00, 440.00, 392.00, 349.23, 329.63, 293.66];
+  function playNote(frequency, delay = 0) {
+    if (!ctx || !musicGain || !running) return;
+    const t = ctx.currentTime + delay;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(frequency, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.09, t + 0.045);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.62);
+    o.connect(g).connect(musicGain);
+    o.start(t);
+    o.stop(t + 0.68);
+  }
+  function scheduleMelody() {
+    clearTimeout(musicTimer);
+    if (!running) return;
+    melody.forEach((note, i) => playNote(note, i * 0.72));
+    musicTimer = setTimeout(scheduleMelody, melody.length * 720);
+  }
+  function notify() { listeners.forEach(listener => listener(running, volume)); }
+
   /* one gull cry: a pitch-bent sine with a touch of noise */
   function gull() {
     if (!ctx || !running) return;
@@ -83,16 +112,20 @@ export function createAudio() {
     if (ctx.state === 'suspended') await ctx.resume();
     running = true;
     master.gain.cancelScheduledValues(ctx.currentTime);
-    master.gain.setTargetAtTime(0.9, ctx.currentTime, 1.4);
+    master.gain.setTargetAtTime(volume * 0.9, ctx.currentTime, 1.4);
     scheduleGulls();
+    scheduleMelody();
+    notify();
   }
   async function stop() {
     if (!ctx) return;
     running = false;
     clearTimeout(gullTimer);
+    clearTimeout(musicTimer);
     master.gain.cancelScheduledValues(ctx.currentTime);
     master.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
     setTimeout(() => { if (!running && ctx && ctx.state === 'running') ctx.suspend(); }, 2500);
+    notify();
   }
   async function toggle() {
     if (running) { await stop(); return false; }
@@ -100,10 +133,26 @@ export function createAudio() {
     return true;
   }
 
+  function setVolume(value) {
+    volume = Math.min(1, Math.max(0, Number(value)));
+    if (ctx && master) master.gain.setTargetAtTime(running ? volume * 0.9 : 0, ctx.currentTime, 0.08);
+    notify();
+  }
+  function subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); }
+
+  const unlock = (event) => {
+    if (event.target.closest && event.target.closest('#btn-audio')) return;
+    start().catch(() => {});
+    document.removeEventListener('pointerdown', unlock, true);
+    document.removeEventListener('keydown', unlock, true);
+  };
+  document.addEventListener('pointerdown', unlock, true);
+  document.addEventListener('keydown', unlock, true);
+
   document.addEventListener('visibilitychange', () => {
     if (!ctx || !running) return;
     if (document.hidden) ctx.suspend(); else ctx.resume();
   });
 
-  return { start, stop, toggle, isOn: () => running };
+  return { start, stop, toggle, setVolume, subscribe, isOn: () => running, getVolume: () => volume };
 }

@@ -128,7 +128,14 @@ svg { display: block; }
   display: inline-flex; align-items: baseline; gap: 10px;
 }
 .brand small { font-size: 13px; font-weight: 300; color: rgba(245, 250, 252, 0.8); }
-.topbar__actions { display: flex; gap: 8px; }
+.topbar__actions { display: flex; gap: 8px; align-items: center; }
+.audio-volume {
+  display: flex; align-items: center; gap: 8px; padding: 0 11px; min-height: 40px;
+  border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass);
+  color: rgba(245, 250, 252, 0.78); font-size: 12px; white-space: nowrap;
+}
+.audio-volume input { width: 82px; accent-color: var(--turq); cursor: pointer; }
+.audio-volume output { min-width: 28px; color: var(--foam); font-variant-numeric: tabular-nums; }
 .icon-btn {
   display: inline-flex; align-items: center; gap: 8px;
   height: 40px; padding: 0 14px 0 10px; border-radius: 999px;
@@ -388,6 +395,9 @@ svg { display: block; }
   .topbar { padding: 0 14px; }
   .icon-btn span { display: none; }
   .icon-btn { padding: 0 10px; width: 40px; justify-content: center; }
+  .audio-volume { gap: 5px; padding: 0 8px; }
+  .audio-volume > span { display: none; }
+  .audio-volume input { width: 64px; }
   .brand { font-size: 19px; }
   .brand small { display: none; }
 
@@ -467,6 +477,11 @@ svg { display: block; }
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path class="wave" d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
         <span>צליל כבוי</span>
       </button>
+      <label class="audio-volume" for="audio-volume">
+        <span>עוצמה</span>
+        <input id="audio-volume" type="range" min="0" max="100" value="75" aria-label="עוצמת קול">
+        <output id="audio-volume-value">75%</output>
+      </label>
       <button id="btn-quality" class="icon-btn" type="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg>
         <span>איכות גבוהה</span>
@@ -38548,7 +38563,9 @@ void main() {
       modal: $("#modal"),
       btnAudio: $("#btn-audio"),
       btnInfo: $("#btn-info"),
-      btnQuality: $("#btn-quality")
+      btnQuality: $("#btn-quality"),
+      audioVolume: $("#audio-volume"),
+      audioVolumeValue: $("#audio-volume-value")
     };
     document.documentElement.classList.toggle("is-touch", isTouch2);
     function setLoader2(progress, msg) {
@@ -38913,6 +38930,15 @@ void main() {
         dom.btnAudio.setAttribute("aria-pressed", on);
         dom.btnAudio.querySelector("span").textContent = on ? "צליל פועל" : "צליל כבוי";
       });
+      const syncAudio = (on, volume) => {
+        dom.btnAudio.setAttribute("aria-pressed", on);
+        dom.btnAudio.querySelector("span").textContent = on ? "צליל פועל" : "צליל כבוי";
+        dom.audioVolume.value = Math.round(volume * 100);
+        dom.audioVolumeValue.textContent = `${Math.round(volume * 100)}%`;
+      };
+      dom.audioVolume.addEventListener("input", () => audio2.setVolume(dom.audioVolume.value / 100));
+      audio2.subscribe(syncAudio);
+      syncAudio(audio2.isOn(), audio2.getVolume());
       const qLabel = () => dom.btnQuality.querySelector("span").textContent = quality2.get().high ? "איכות גבוהה" : "איכות מאוזנת";
       qLabel();
       dom.btnQuality.addEventListener("click", () => {
@@ -38947,13 +38973,18 @@ void main() {
 
   // components/audio.js
   function createAudio() {
-    let ctx = null, master = null, running = false, gullTimer = null;
+    let ctx = null, master = null, musicGain = null, running = false, gullTimer = null, musicTimer = null;
+    let volume = 0.75;
+    const listeners = /* @__PURE__ */ new Set();
     function build2() {
       const AC = window.AudioContext || window.webkitAudioContext;
       ctx = new AC();
       master = ctx.createGain();
       master.gain.value = 0;
       master.connect(ctx.destination);
+      musicGain = ctx.createGain();
+      musicGain.gain.value = 0.18;
+      musicGain.connect(master);
       const len = ctx.sampleRate * 4;
       const buf = ctx.createBuffer(2, len, ctx.sampleRate);
       for (let c = 0; c < 2; c++) {
@@ -39010,6 +39041,30 @@ void main() {
       lfo1.start();
       lfo2.start();
     }
+    const melody = [293.66, 349.23, 392, 440, 392, 349.23, 329.63, 293.66];
+    function playNote(frequency, delay = 0) {
+      if (!ctx || !musicGain || !running) return;
+      const t = ctx.currentTime + delay;
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "triangle";
+      o.frequency.setValueAtTime(frequency, t);
+      g.gain.setValueAtTime(1e-4, t);
+      g.gain.exponentialRampToValueAtTime(0.09, t + 0.045);
+      g.gain.exponentialRampToValueAtTime(1e-4, t + 0.62);
+      o.connect(g).connect(musicGain);
+      o.start(t);
+      o.stop(t + 0.68);
+    }
+    function scheduleMelody() {
+      clearTimeout(musicTimer);
+      if (!running) return;
+      melody.forEach((note, i) => playNote(note, i * 0.72));
+      musicTimer = setTimeout(scheduleMelody, melody.length * 720);
+    }
+    function notify() {
+      listeners.forEach((listener) => listener(running, volume));
+    }
     function gull() {
       if (!ctx || !running) return;
       const t = ctx.currentTime;
@@ -39041,18 +39096,22 @@ void main() {
       if (ctx.state === "suspended") await ctx.resume();
       running = true;
       master.gain.cancelScheduledValues(ctx.currentTime);
-      master.gain.setTargetAtTime(0.9, ctx.currentTime, 1.4);
+      master.gain.setTargetAtTime(volume * 0.9, ctx.currentTime, 1.4);
       scheduleGulls();
+      scheduleMelody();
+      notify();
     }
     async function stop() {
       if (!ctx) return;
       running = false;
       clearTimeout(gullTimer);
+      clearTimeout(musicTimer);
       master.gain.cancelScheduledValues(ctx.currentTime);
       master.gain.setTargetAtTime(0, ctx.currentTime, 0.5);
       setTimeout(() => {
         if (!running && ctx && ctx.state === "running") ctx.suspend();
       }, 2500);
+      notify();
     }
     async function toggle() {
       if (running) {
@@ -39062,12 +39121,30 @@ void main() {
       await start();
       return true;
     }
+    function setVolume(value) {
+      volume = Math.min(1, Math.max(0, Number(value)));
+      if (ctx && master) master.gain.setTargetAtTime(running ? volume * 0.9 : 0, ctx.currentTime, 0.08);
+      notify();
+    }
+    function subscribe(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    }
+    const unlock = (event) => {
+      if (event.target.closest && event.target.closest("#btn-audio")) return;
+      start().catch(() => {
+      });
+      document.removeEventListener("pointerdown", unlock, true);
+      document.removeEventListener("keydown", unlock, true);
+    };
+    document.addEventListener("pointerdown", unlock, true);
+    document.addEventListener("keydown", unlock, true);
     document.addEventListener("visibilitychange", () => {
       if (!ctx || !running) return;
       if (document.hidden) ctx.suspend();
       else ctx.resume();
     });
-    return { start, stop, toggle, isOn: () => running };
+    return { start, stop, toggle, setVolume, subscribe, isOn: () => running, getVolume: () => volume };
   }
 
   // main.js

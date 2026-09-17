@@ -73,6 +73,7 @@ export function createUI({ director, camera, snapshot, audio, quality, reducedMo
     topbar: $('#topbar'), story: $('#story'), timeline: $('#timeline'), pins: $('#pins'),
     hint: $('#scroll-hint'), drawer: $('#drawer'), modal: $('#modal'),
     btnAudio: $('#btn-audio'), btnInfo: $('#btn-info'), btnQuality: $('#btn-quality'),
+    audioVolume: $('#audio-volume'), audioVolumeValue: $('#audio-volume-value'),
   };
   document.documentElement.classList.toggle('is-touch', isTouch);
 
@@ -442,6 +443,15 @@ export function createUI({ director, camera, snapshot, audio, quality, reducedMo
       dom.btnAudio.setAttribute('aria-pressed', on);
       dom.btnAudio.querySelector('span').textContent = on ? 'צליל פועל' : 'צליל כבוי';
     });
+    const syncAudio = (on, volume) => {
+      dom.btnAudio.setAttribute('aria-pressed', on);
+      dom.btnAudio.querySelector('span').textContent = on ? 'צליל פועל' : 'צליל כבוי';
+      dom.audioVolume.value = Math.round(volume * 100);
+      dom.audioVolumeValue.textContent = `${Math.round(volume * 100)}%`;
+    };
+    dom.audioVolume.addEventListener('input', () => audio.setVolume(dom.audioVolume.value / 100));
+    audio.subscribe(syncAudio);
+    syncAudio(audio.isOn(), audio.getVolume());
     const qLabel = () => dom.btnQuality.querySelector('span').textContent = quality.get().high ? 'איכות גבוהה' : 'איכות מאוזנת';
     qLabel();
     dom.btnQuality.addEventListener('click', () => { quality.toggle(); qLabel(); });

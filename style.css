@@ -115,7 +115,14 @@ svg { display: block; }
   display: inline-flex; align-items: baseline; gap: 10px;
 }
 .brand small { font-size: 13px; font-weight: 300; color: rgba(245, 250, 252, 0.8); }
-.topbar__actions { display: flex; gap: 8px; }
+.topbar__actions { display: flex; gap: 8px; align-items: center; }
+.audio-volume {
+  display: flex; align-items: center; gap: 8px; padding: 0 11px; min-height: 40px;
+  border: 1px solid var(--glass-edge); border-radius: 999px; background: var(--glass);
+  color: rgba(245, 250, 252, 0.78); font-size: 12px; white-space: nowrap;
+}
+.audio-volume input { width: 82px; accent-color: var(--turq); cursor: pointer; }
+.audio-volume output { min-width: 28px; color: var(--foam); font-variant-numeric: tabular-nums; }
 .icon-btn {
   display: inline-flex; align-items: center; gap: 8px;
   height: 40px; padding: 0 14px 0 10px; border-radius: 999px;
@@ -375,6 +382,9 @@ svg { display: block; }
   .topbar { padding: 0 14px; }
   .icon-btn span { display: none; }
   .icon-btn { padding: 0 10px; width: 40px; justify-content: center; }
+  .audio-volume { gap: 5px; padding: 0 8px; }
+  .audio-volume > span { display: none; }
+  .audio-volume input { width: 64px; }
   .brand { font-size: 19px; }
   .brand small { display: none; }
 
