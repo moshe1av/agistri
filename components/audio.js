@@ -15,7 +15,7 @@ export function createAudio() {
     master.gain.value = 0;
     master.connect(ctx.destination);
     musicGain = ctx.createGain();
-    musicGain.gain.value = 0.18;
+    musicGain.gain.value = 0.34;
     musicGain.connect(master);
 
     /* --- waves: brown-ish noise, low-passed, swelling with two slow LFOs --- */
@@ -70,11 +70,23 @@ export function createAudio() {
     o.type = 'triangle';
     o.frequency.setValueAtTime(frequency, t);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.09, t + 0.045);
+    g.gain.exponentialRampToValueAtTime(0.16, t + 0.045);
     g.gain.exponentialRampToValueAtTime(0.0001, t + 0.62);
     o.connect(g).connect(musicGain);
     o.start(t);
     o.stop(t + 0.68);
+    if (frequency === melody[0]) {
+      const bass = ctx.createOscillator();
+      const bassGain = ctx.createGain();
+      bass.type = 'sine';
+      bass.frequency.setValueAtTime(frequency / 2, t);
+      bassGain.gain.setValueAtTime(0.0001, t);
+      bassGain.gain.exponentialRampToValueAtTime(0.07, t + 0.06);
+      bassGain.gain.exponentialRampToValueAtTime(0.0001, t + 1.35);
+      bass.connect(bassGain).connect(musicGain);
+      bass.start(t);
+      bass.stop(t + 1.4);
+    }
   }
   function scheduleMelody() {
     clearTimeout(musicTimer);
